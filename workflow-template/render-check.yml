@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
+
     steps:
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
@@ -26,4 +27,4 @@ jobs:
         run: react-scan-cli
         env:
           GITHUB_TOKEN: ${{ secrets.REACT_SCAN_TOKEN }}
-          RI_CONFIG: ${{ secrets.REACT_SCAN_CONFIG }}
+          RI_CONFIG: ${{ vars.REACT_SCAN_CONFIG }}
