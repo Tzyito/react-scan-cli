@@ -1,0 +1,34 @@
+{
+  "name": "@react-scan-cli/next",
+  "version": "0.1.8",
+  "description": "Next.js plugin for react-scan-cli — detects React re-render issues via webpack entry injection",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly && bun build src/index.ts --outfile dist/index.mjs --format esm --target node --external next && bun build src/index.ts --outfile dist/index.js --format cjs --target node --external next && bun build src/inject-entry.ts --outfile dist/inject-entry.js --format esm --target browser --external react-scan",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run build"
+  },
+  "peerDependencies": {
+    "next": ">=13.0.0",
+    "react-scan": ">=0.1.0"
+  },
+  "devDependencies": {
+    "next": "^14.0.0",
+    "typescript": "^5.0.0",
+    "@types/bun": "latest",
+    "@types/node": "^20.0.0"
+  }
+}

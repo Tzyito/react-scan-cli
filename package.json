@@ -15,7 +15,7 @@
     "verify:reporter": "bun run scripts/verify-reporter.ts",
     "verify": "bun run verify:inject && bun run verify:analyzer && bun run verify:reporter",
     "e2e": "bun run scripts/e2e.ts",
-    "publish:all": "bun run build && npm publish --access public -w packages/vite-plugin && npm publish --access public -w packages/runner && npm publish --access public -w packages/skills"
+    "publish:all": "bun run build && npm publish --access public -w packages/vite-plugin && npm publish --access public -w packages/next && npm publish --access public -w packages/runner && npm publish --access public -w packages/skills"
   },
   "devDependencies": {
     "typescript": "^5.0.0",
