@@ -1,5 +1,5 @@
-import { chromium, type BrowserContext } from 'playwright';
-import type { RunnerConfig, PageReport, ComponentData, IssueData } from './types';
+import { chromium, type BrowserContext, type Page } from 'playwright';
+import type { RunnerConfig, PageReport, ComponentData, IssueData, PageInteraction } from './types';
 import { crawlPages } from './crawler';
 
 export async function analyzePages(config: RunnerConfig): Promise<PageReport[]> {
@@ -58,27 +58,36 @@ export async function analyzePages(config: RunnerConfig): Promise<PageReport[]> 
 async function analyzeSinglePage(
   context: BrowserContext,
   baseUrl: string,
-  pageConfig: { name: string; url: string },
+  pageConfig: { name: string; url: string; interactions?: PageInteraction[] },
   observeDuration: number,
   threshold: number,
 ): Promise<PageReport> {
   const page = await context.newPage();
 
   page.on('console', msg => {
-    if (msg.type() === 'error') {
-      console.error(`  [page error] ${msg.text()}`);
-    }
+    if (msg.type() === 'error') console.error(`  [page error] ${msg.text()}`);
   });
   page.on('pageerror', err => {
     console.error(`  [page uncaught] ${err.message}`);
   });
+
+  const startTime = Date.now();
 
   await page.goto(baseUrl + pageConfig.url, {
     waitUntil: 'networkidle',
     timeout: 30000,
   });
 
-  await page.waitForTimeout(observeDuration);
+  // Let the page settle before interactions
+  await page.waitForTimeout(800);
+
+  // Run interactions during the observation window
+  await runInteractions(page, pageConfig.interactions);
+
+  // Fill remaining observation time
+  const elapsed = Date.now() - startTime;
+  const remaining = observeDuration - elapsed;
+  if (remaining > 0) await page.waitForTimeout(remaining);
 
   const debugState = await page.evaluate(() => ({
     hasInspector: '__renderInspector__' in window,
@@ -88,7 +97,7 @@ async function analyzeSinglePage(
   console.log(`  [debug] hasInspector=${debugState.hasInspector} cookies="${debugState.cookies}"`);
   if (debugState.inspector) {
     const count = Object.keys(debugState.inspector.components).length;
-    console.log(`  [debug] components tracked: ${count}`, count > 0 ? debugState.inspector.components : '(empty)');
+    console.log(`  [debug] components tracked: ${count}`);
   }
 
   const rawComponents = await page.evaluate(() => {
@@ -103,12 +112,21 @@ async function analyzeSinglePage(
   const issues: IssueData[] = Object.entries(rawComponents)
     .filter(([, data]) => data.count > threshold)
     .sort((a, b) => b[1].count - a[1].count)
-    .map(([component, data]) => ({
-      component,
-      count: data.count,
-      reasons: data.reasons,
-      severity: data.count > 50 ? 'high' : data.count > 20 ? 'medium' : 'low',
-    }));
+    .map(([component, data]) => {
+      const avgTime = data.totalTime > 0 && data.count > 0
+        ? Math.round((data.totalTime / data.count) * 10) / 10
+        : null;
+      return {
+        component,
+        count: data.count,
+        unnecessaryCount: data.unnecessaryCount ?? 0,
+        avgTime,
+        minFps: data.minFps ?? null,
+        reasons: data.reasons,
+        changes: data.changes ?? [],
+        severity: calcSeverity(data.count, avgTime, data.minFps),
+      };
+    });
 
   return {
     page: pageConfig.name,
@@ -118,4 +136,80 @@ async function analyzeSinglePage(
     observeDuration,
     timestamp: new Date().toISOString(),
   };
+}
+
+function calcSeverity(
+  count: number,
+  avgTime: number | null,
+  minFps: number | null,
+): 'high' | 'medium' | 'low' {
+  const slowRender = avgTime != null && avgTime > 16;
+  const fpsDrop = minFps != null && minFps < 30;
+  if (count > 50 || (count > 20 && slowRender) || fpsDrop) return 'high';
+  if (count > 20 || (count > 10 && slowRender) || (minFps != null && minFps < 60)) return 'medium';
+  return 'low';
+}
+
+const DEFAULT_INTERACTIONS: PageInteraction[] = [
+  { type: 'scroll', scrollY: 0.25, description: 'scroll 25%' },
+  { type: 'wait', waitMs: 400 },
+  { type: 'scroll', scrollY: 0.5, description: 'scroll 50%' },
+  { type: 'wait', waitMs: 400 },
+  { type: 'scroll', scrollY: 0.75, description: 'scroll 75%' },
+  { type: 'wait', waitMs: 400 },
+  { type: 'scroll', scrollY: 1.0, description: 'scroll to bottom' },
+  { type: 'wait', waitMs: 600 },
+  { type: 'scroll', scrollY: 0, description: 'scroll back to top' },
+  { type: 'wait', waitMs: 400 },
+];
+
+async function runInteractions(page: Page, custom?: PageInteraction[]): Promise<void> {
+  const all = [...DEFAULT_INTERACTIONS, ...(custom ?? [])];
+
+  for (const action of all) {
+    try {
+      if (action.description) {
+        console.log(`  [interact] ${action.description}`);
+      }
+
+      switch (action.type) {
+        case 'scroll': {
+          const y = action.scrollY ?? 0;
+          if (y <= 1) {
+            await page.evaluate((pct: number) =>
+              window.scrollTo({ top: document.body.scrollHeight * pct, behavior: 'smooth' }),
+              y,
+            );
+          } else {
+            await page.evaluate((px: number) =>
+              window.scrollTo({ top: px, behavior: 'smooth' }),
+              y,
+            );
+          }
+          break;
+        }
+        case 'click': {
+          if (action.selector) {
+            const el = page.locator(action.selector).first();
+            await el.click({ timeout: 3000 });
+          }
+          break;
+        }
+        case 'hover': {
+          if (action.selector) {
+            const el = page.locator(action.selector).first();
+            await el.hover({ timeout: 3000 });
+          }
+          break;
+        }
+        case 'wait': {
+          await page.waitForTimeout(action.waitMs ?? 500);
+          break;
+        }
+      }
+    } catch (err) {
+      // Non-fatal: log and continue
+      console.warn(`  [interact] skipped (${action.type} ${action.selector ?? ''}): ${(err as Error).message}`);
+    }
+  }
 }
