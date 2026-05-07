@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// 验证 vite-plugin 生成的注入脚本内容是否正确
+// Verify that the vite-plugin generates a correct inject script
 import { buildInjectScript } from '../packages/vite-plugin/src/inject';
 
 const script = buildInjectScript({
@@ -8,23 +8,21 @@ const script = buildInjectScript({
   enableInDev: true,
 });
 
-console.log('=== 生成的注入脚本 ===\n');
+console.log('=== generated inject script ===\n');
 console.log(script);
 
-// 基本断言
-const checks = [
-  ['包含 react-scan import', script.includes("from 'react-scan'")],
-  ['包含 cookie 检查', script.includes('__render_inspector__=true')],
-  ['包含 window.__renderInspector__', script.includes('window.__renderInspector__')],
-  ['包含 onRender 回调', script.includes('onRender')],
-  ['包含 threshold 值', script.includes('threshold: 5')],
+const checks: [string, boolean][] = [
+  ['imports react-scan', script.includes("from 'react-scan'")],
+  ['checks trigger cookie', script.includes('__render_inspector__=true')],
+  ['sets window.__renderInspector__', script.includes('window.__renderInspector__')],
+  ['registers onRender callback', script.includes('onRender')],
+  ['embeds threshold value', script.includes('threshold: 5')],
 ];
 
-console.log('\n=== 检查项 ===');
+console.log('\n=== checks ===');
 let pass = true;
 for (const [label, result] of checks) {
-  const icon = result ? '✓' : '✗';
-  console.log(`${icon} ${label}`);
+  console.log(`${result ? '✓' : '✗'} ${label}`);
   if (!result) pass = false;
 }
 

@@ -22,7 +22,6 @@ export class GitHubReporter {
 
   async report(reports: PageReport[], projectName: string): Promise<void> {
     await this.ensureLabels(projectName);
-
     for (const report of reports) {
       if (report.issues.length > 0) {
         await this.upsertIssue(report, projectName);
@@ -33,23 +32,18 @@ export class GitHubReporter {
   }
 
   private async ensureLabels(projectName: string): Promise<void> {
-    const labelsToCreate = [
+    const labels = [
       { name: ISSUE_LABEL, color: 'e11d48', description: 'React re-render issue detected by react-scan-cli' },
       { name: projectName, color: '6366f1', description: '' },
       { name: 'severity:high', color: 'dc2626', description: '' },
       { name: 'severity:medium', color: 'f59e0b', description: '' },
       { name: 'severity:low', color: '22c55e', description: '' },
     ];
-
-    for (const label of labelsToCreate) {
+    for (const label of labels) {
       try {
-        await this.octokit.issues.createLabel({
-          owner: this.owner,
-          repo: this.repo,
-          ...label,
-        });
+        await this.octokit.issues.createLabel({ owner: this.owner, repo: this.repo, ...label });
       } catch {
-        // label already exists, ignore
+        // label already exists
       }
     }
   }
@@ -58,32 +52,23 @@ export class GitHubReporter {
     const existing = await this.findOpenIssue(projectName, report.url);
     const highestSeverity = report.issues[0]?.severity ?? 'low';
 
-    const title = `[${projectName}] ${report.page} · ${report.issues.length} 个重渲染问题`;
+    const title = `[${projectName}] ${report.page} · ${report.issues.length} re-render issue(s)`;
     const body = this.buildIssueBody(report, projectName);
     const labels = [ISSUE_LABEL, projectName, SEVERITY_LABELS[highestSeverity]];
 
     if (existing) {
       await this.octokit.issues.update({
-        owner: this.owner,
-        repo: this.repo,
-        issue_number: existing.number,
-        title,
-        body,
-        labels,
+        owner: this.owner, repo: this.repo,
+        issue_number: existing.number, title, body, labels,
       });
       await this.octokit.issues.createComment({
-        owner: this.owner,
-        repo: this.repo,
+        owner: this.owner, repo: this.repo,
         issue_number: existing.number,
-        body: `🔄 **自动更新** · ${new Date().toLocaleString('zh-CN')}\n\n问题仍然存在，数据已更新为最新检测结果。`,
+        body: `🔄 **Auto-updated** · ${new Date().toUTCString()}\n\nIssue still present — data refreshed from latest scan.`,
       });
     } else {
       await this.octokit.issues.create({
-        owner: this.owner,
-        repo: this.repo,
-        title,
-        body,
-        labels,
+        owner: this.owner, repo: this.repo, title, body, labels,
       });
     }
   }
@@ -93,84 +78,77 @@ export class GitHubReporter {
     if (!existing) return;
 
     await this.octokit.issues.createComment({
-      owner: this.owner,
-      repo: this.repo,
+      owner: this.owner, repo: this.repo,
       issue_number: existing.number,
-      body: `✅ **自动关闭** · ${new Date().toLocaleString('zh-CN')}\n\n本次检测未发现重渲染问题，自动关闭此 Issue。`,
+      body: `✅ **Auto-closed** · ${new Date().toUTCString()}\n\nNo re-render issues detected in the latest scan.`,
     });
     await this.octokit.issues.update({
-      owner: this.owner,
-      repo: this.repo,
-      issue_number: existing.number,
-      state: 'closed',
+      owner: this.owner, repo: this.repo,
+      issue_number: existing.number, state: 'closed',
     });
   }
 
   private async findOpenIssue(projectName: string, pageUrl: string) {
     const { data } = await this.octokit.issues.listForRepo({
-      owner: this.owner,
-      repo: this.repo,
-      state: 'open',
-      labels: `${ISSUE_LABEL},${projectName}`,
-      per_page: 100,
+      owner: this.owner, repo: this.repo,
+      state: 'open', labels: `${ISSUE_LABEL},${projectName}`, per_page: 100,
     });
-    return data.find(issue =>
-      issue.body?.includes(`<!-- page-url: ${pageUrl} -->`)
-    ) ?? null;
+    // match by hidden comment so title changes don't create duplicates
+    return data.find(issue => issue.body?.includes(`<!-- page-url: ${pageUrl} -->`)) ?? null;
   }
 
   private buildIssueBody(report: PageReport, projectName: string): string {
-    const severityIcon = { high: '🔴', medium: '🟡', low: '🟢' };
-    const severityText = { high: '严重', medium: '中等', low: '轻微' };
+    const icon = { high: '🔴', medium: '🟡', low: '🟢' };
+    const severity = { high: 'High', medium: 'Medium', low: 'Low' };
 
     return `<!-- page-url: ${report.url} -->
 <!-- project: ${projectName} -->
 
-## 页面信息
+## Page Info
 
-| 项目 | 页面 | URL | 检测时间 | 观察时长 |
-|------|------|-----|----------|----------|
-| \`${projectName}\` | ${report.page} | \`${report.url}\` | ${new Date(report.timestamp).toLocaleString('zh-CN')} | ${report.observeDuration / 1000}s |
+| Project | Page | URL | Detected at | Observe duration |
+|---------|------|-----|-------------|-----------------|
+| \`${projectName}\` | ${report.page} | \`${report.url}\` | ${new Date(report.timestamp).toUTCString()} | ${report.observeDuration / 1000}s |
 
-## 问题组件
+## Problematic Components
 
 ${report.issues.map((issue, idx) => `
-### ${idx + 1}. ${severityIcon[issue.severity]} \`${issue.component}\`
+### ${idx + 1}. ${icon[issue.severity]} \`${issue.component}\`
 
-| 重渲染次数 | 严重程度 | 触发原因 |
-|-----------|---------|---------|
-| **${issue.count}** 次 | ${severityText[issue.severity]} | ${issue.reasons.join(', ') || '未知'} |
+| Re-renders | Severity | Triggers |
+|-----------|----------|---------|
+| **${issue.count}** | ${severity[issue.severity]} | ${issue.reasons.join(', ') || 'unknown'} |
 
-**优化建议**
+**Suggestions**
 
 ${this.getSuggestion(issue.reasons)}
 `).join('\n---\n')}
 
-## 页面截图
+## Screenshot
 
-<img src="data:image/png;base64,${report.screenshotBase64}" width="800" alt="页面截图" />
+<img src="data:image/png;base64,${report.screenshotBase64}" width="800" alt="page screenshot" />
 
-## 复现方式
+## Reproduction
 
-1. 访问 \`${report.url}\`
-2. 等待页面完全加载（约 ${report.observeDuration / 1000} 秒）
-3. 安装 React DevTools，打开 Profiler 面板录制，观察以上组件的重渲染情况
+1. Visit \`${report.url}\`
+2. Wait for the page to fully load (~${report.observeDuration / 1000}s)
+3. Open React DevTools → Profiler → record, watch the components listed above
 
-## 快速定位
+## Quick Diagnosis
 
-在浏览器 Console 运行以下代码，实时查看重渲染组件：
+Run in the browser console to enable react-scan highlights:
 
 \`\`\`js
-// 方法 1：通过 cookie 开启 react-scan 高亮（需要项目已接入 @react-scan-cli/vite-plugin）
+// Option 1: enable via cookie (requires @react-scan-cli/vite-plugin)
 document.cookie = '__render_inspector__=true; path=/';
 location.reload();
 
-// 方法 2：React DevTools Profiler
-// DevTools → Profiler → 勾选 "Record why each component rendered" → 录制
+// Option 2: React DevTools Profiler
+// DevTools → Profiler → check "Record why each component rendered" → record
 \`\`\`
 
 ---
-*由 [react-scan-cli](https://github.com/Tzyito/react-scan-cli) 自动生成 · 修复后请关闭此 Issue*`.trim();
+*Generated by [react-scan-cli](https://github.com/Tzyito/react-scan-cli) · Close this issue once fixed*`.trim();
   }
 
   private getSuggestion(reasons: string[]): string {
@@ -178,32 +156,32 @@ location.reload();
 
     if (reasons.some(r => r.startsWith('props'))) {
       lines.push(
-        '- 父组件传入了非稳定引用（对象字面量、内联箭头函数），每次渲染都产生新引用',
-        '- 使用 `useMemo` 稳定对象/数组，使用 `useCallback` 稳定函数',
-        '- 使用 `React.memo()` 包裹组件，让 props 浅比较生效',
+        '- Parent passes unstable references (inline objects/arrays or arrow functions) on every render',
+        '- Stabilize with `useMemo` for objects/arrays, `useCallback` for functions',
+        '- Wrap the component with `React.memo()` to enable shallow prop comparison',
       );
     }
 
     if (reasons.some(r => r.startsWith('context'))) {
       lines.push(
-        '- Context value 是对象且未 memo，每次父组件渲染都创建新对象触发所有消费者',
-        '- 用 `useMemo` 稳定 Context 的 value：`const value = useMemo(() => ({ ... }), [deps])`',
-        '- 考虑将大 Context 拆分为多个粒度更小的 Context',
+        '- Context value is an un-memoized object — every parent render creates a new reference',
+        '- Memoize: `const value = useMemo(() => ({ ... }), [deps])`',
+        '- Consider splitting large contexts into smaller, more focused ones',
       );
     }
 
     if (reasons.some(r => r.startsWith('state'))) {
       lines.push(
-        '- 检查是否有 WebSocket 推送或定时器在高频调用 setState',
-        '- 用 `throttle` 或 `debounce` 限制更新频率（建议不低于 200ms）',
-        '- 用 `useReducer` 合并多个 state 的批量更新',
+        '- Check for high-frequency `setState` from WebSocket messages or timers',
+        '- Throttle or debounce updates (recommended interval: ≥200ms)',
+        '- Batch multiple state updates with `useReducer`',
       );
     }
 
     if (lines.length === 0) {
       lines.push(
-        '- 打开 React DevTools Profiler，勾选 "Record why each component rendered" 后录制',
-        '- 查看 "Why did this render?" 面板获取详细原因',
+        '- Open React DevTools Profiler, enable "Record why each component rendered", then record',
+        '- Check the "Why did this render?" panel for details',
       );
     }
 

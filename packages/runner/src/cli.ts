@@ -6,12 +6,12 @@ async function main() {
   const rawConfig = process.env.RI_CONFIG;
 
   if (!githubToken) {
-    console.error('[react-scan-cli] 错误：缺少 GITHUB_TOKEN 环境变量');
+    console.error('[react-scan-cli] error: GITHUB_TOKEN is not set');
     process.exit(1);
   }
 
   if (!rawConfig) {
-    console.error('[react-scan-cli] 错误：缺少 RI_CONFIG 环境变量');
+    console.error('[react-scan-cli] error: RI_CONFIG is not set');
     process.exit(1);
   }
 
@@ -19,7 +19,7 @@ async function main() {
   try {
     config = JSON.parse(rawConfig);
   } catch {
-    console.error('[react-scan-cli] 错误：RI_CONFIG 不是合法的 JSON');
+    console.error('[react-scan-cli] error: RI_CONFIG is not valid JSON');
     process.exit(1);
   }
 
@@ -27,6 +27,6 @@ async function main() {
 }
 
 main().catch(err => {
-  console.error('[react-scan-cli] 运行失败：', err);
+  console.error('[react-scan-cli] fatal:', err);
   process.exit(1);
 });

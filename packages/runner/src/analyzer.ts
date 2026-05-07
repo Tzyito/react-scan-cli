@@ -33,13 +33,13 @@ export async function analyzePages(config: RunnerConfig): Promise<PageReport[]> 
   const reports: PageReport[] = [];
 
   for (const pageConfig of pages) {
-    console.log(`[react-scan-cli] 正在分析：${pageConfig.name} (${pageConfig.url})`);
+    console.log(`[react-scan-cli] analyzing: ${pageConfig.name} (${pageConfig.url})`);
     try {
       const report = await analyzeSinglePage(context, baseUrl, pageConfig, observeDuration, threshold);
       reports.push(report);
-      console.log(`[react-scan-cli] ✓ ${pageConfig.name}: ${report.issues.length} 个问题`);
+      console.log(`[react-scan-cli] ✓ ${pageConfig.name}: ${report.issues.length} issue(s)`);
     } catch (err) {
-      console.error(`[react-scan-cli] ✗ ${pageConfig.name} 分析失败:`, err);
+      console.error(`[react-scan-cli] ✗ ${pageConfig.name} failed:`, err);
     }
   }
 
@@ -56,7 +56,6 @@ async function analyzeSinglePage(
 ): Promise<PageReport> {
   const page = await context.newPage();
 
-  // 捕获页面 console，方便排查注入脚本的错误
   page.on('console', msg => {
     if (msg.type() === 'error') {
       console.error(`  [page error] ${msg.text()}`);
@@ -73,7 +72,6 @@ async function analyzeSinglePage(
 
   await page.waitForTimeout(observeDuration);
 
-  // 诊断：打印注入脚本的运行状态
   const debugState = await page.evaluate(() => ({
     hasInspector: '__renderInspector__' in window,
     inspector: (window as any).__renderInspector__ ?? null,
@@ -81,8 +79,8 @@ async function analyzeSinglePage(
   }));
   console.log(`  [debug] hasInspector=${debugState.hasInspector} cookies="${debugState.cookies}"`);
   if (debugState.inspector) {
-    const compCount = Object.keys(debugState.inspector.components).length;
-    console.log(`  [debug] components tracked: ${compCount}`, compCount > 0 ? debugState.inspector.components : '(empty)');
+    const count = Object.keys(debugState.inspector.components).length;
+    console.log(`  [debug] components tracked: ${count}`, count > 0 ? debugState.inspector.components : '(empty)');
   }
 
   const rawComponents = await page.evaluate(() => {

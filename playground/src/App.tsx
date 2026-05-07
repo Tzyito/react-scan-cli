@@ -8,25 +8,25 @@ export default function App() {
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    // 每 100ms 更新一次，8 秒内产生 ~80 次渲染，远超阈值 5
+    // update every 100ms to generate ~80 re-renders over 8s — well above the threshold of 5
     const id = setInterval(() => setTick(t => t + 1), 100);
     return () => clearInterval(id);
   }, []);
 
-  // Context value 未 memo，每次 App 渲染都创建新对象 → Header 因 context 变化重渲染
+  // un-memoized context value: new object on every render → triggers all consumers
   const theme = { mode: 'light' as const, tick };
 
   return (
     <ThemeContext.Provider value={theme}>
       <div style={{ fontFamily: 'sans-serif', padding: 24 }}>
         <Header
-          title="render-inspector playground"
-          onRefresh={() => setTick(0)}   // 内联函数，每次渲染新引用
+          title="react-scan-cli playground"
+          onRefresh={() => setTick(0)}   // inline function: new ref every render
         />
-        {/* items 是内联数组，每次渲染新引用 → UserList 因 props.items 变化重渲染 */}
+        {/* inline array: new ref every render → UserList re-renders on props.items */}
         <UserList items={['Alice', 'Bob', 'Charlie']} tick={tick} />
         <p style={{ color: '#888', fontSize: 12 }}>
-          tick: {tick} — 故意制造高频重渲染用于测试
+          tick: {tick} — intentional high-frequency re-renders for testing
         </p>
       </div>
     </ThemeContext.Provider>

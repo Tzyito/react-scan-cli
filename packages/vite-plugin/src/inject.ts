@@ -24,6 +24,7 @@ import { scan } from 'react-scan';
 
   scan({
     enabled: true,
+    // only show toolbar in dev mode when triggered manually (no cookie)
     showToolbar: isDev && !hasCookie,
     log: false,
     onRender(fiber, renders) {
@@ -32,6 +33,7 @@ import { scan } from 'react-scan';
         fiber.type?.name ||
         null;
 
+      // skip anonymous and React-internal components
       if (!name || name.startsWith('_') || name === 'Anonymous') return;
 
       const data = window.__renderInspector__.components;
