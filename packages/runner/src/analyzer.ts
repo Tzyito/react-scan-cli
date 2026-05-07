@@ -41,7 +41,8 @@ export async function analyzePages(config: RunnerConfig): Promise<PageReport[]> 
   const reports: PageReport[] = [];
 
   for (const pageConfig of pages) {
-    console.log(`[react-scan-cli] analyzing: ${pageConfig.name} → ${baseUrl}${pageConfig.url}`);
+    const displayUrl = pageConfig.url.startsWith('http') ? pageConfig.url : baseUrl + pageConfig.url;
+    console.log(`[react-scan-cli] analyzing: ${pageConfig.name} → ${displayUrl}`);
     try {
       const report = await analyzeSinglePage(context, baseUrl, pageConfig, observeDuration, threshold);
       reports.push(report);
@@ -73,7 +74,11 @@ async function analyzeSinglePage(
 
   const startTime = Date.now();
 
-  await page.goto(baseUrl + pageConfig.url, {
+  const targetUrl = pageConfig.url.startsWith('http')
+    ? pageConfig.url
+    : baseUrl + pageConfig.url;
+
+  await page.goto(targetUrl, {
     waitUntil: 'networkidle',
     timeout: 30000,
   });

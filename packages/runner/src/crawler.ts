@@ -26,12 +26,14 @@ export async function crawlPages(
     const pages: PageConfig[] = [];
 
     const add = (url: string) => {
-      const u = new URL(url);
-      // drop query strings and hash, keep pathname
-      const clean = u.pathname;
-      if (seen.has(clean)) return;
-      seen.add(clean);
-      pages.push({ name: clean, url: clean });
+      try {
+        const u = new URL(url);
+        // drop query string and hash, keep origin + pathname
+        const clean = u.origin + u.pathname;
+        if (seen.has(clean)) return;
+        seen.add(clean);
+        pages.push({ name: u.pathname, url: clean });
+      } catch { /* ignore malformed */ }
     };
 
     // Root page always first
@@ -39,7 +41,7 @@ export async function crawlPages(
 
     for (const href of hrefs) {
       if (pages.length >= maxPages) break;
-      try { add(href); } catch { /* ignore malformed */ }
+      add(href);
     }
 
     return pages;

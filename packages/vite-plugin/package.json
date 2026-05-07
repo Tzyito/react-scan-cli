@@ -1,6 +1,6 @@
 {
   "name": "@react-scan-cli/vite-plugin",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Vite plugin for react-scan-cli — detects React re-render issues",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
