@@ -1,0 +1,29 @@
+name: React 重渲染检测
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'   # 每周一凌晨 2 点（UTC）
+  workflow_dispatch:        # 支持手动触发
+
+jobs:
+  render-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 安装 Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: 安装 runner
+        run: bun install -g @react-scan-cli/runner
+
+      - name: 安装 Playwright Chromium
+        run: bunx playwright install chromium --with-deps
+
+      - name: 运行检测
+        run: react-scan-cli run
+        env:
+          GITHUB_TOKEN: ${{ secrets.REACT_SCAN_TOKEN }}
+          RI_CONFIG: ${{ secrets.REACT_SCAN_CONFIG }}

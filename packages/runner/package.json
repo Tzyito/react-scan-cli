@@ -1,0 +1,37 @@
+{
+  "name": "@react-scan-cli/runner",
+  "version": "0.1.0",
+  "description": "CLI runner for react-scan-cli — collects data via Playwright and reports to GitHub Issues",
+  "bin": {
+    "react-scan-cli": "./bin/react-scan-cli.ts"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "bun run src/cli.ts",
+    "build": "tsc --emitDeclarationOnly && bun build src/index.ts --outfile dist/index.mjs --format esm --target node --external playwright --external @octokit/rest && bun build src/index.ts --outfile dist/index.js --format cjs --target node --external playwright --external @octokit/rest && bun build src/cli.ts --outfile dist/cli.js --format cjs --target node --external playwright --external @octokit/rest",
+    "typecheck": "tsc --noEmit",
+    "start": "bun run bin/react-scan-cli.ts",
+    "prepublishOnly": "bun run build"
+  },
+  "dependencies": {
+    "@octokit/rest": "^20.0.0",
+    "playwright": "^1.40.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/bun": "latest"
+  }
+}

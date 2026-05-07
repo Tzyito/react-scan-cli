@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mock Page - react-scan-cli fixture</title>
+</head>
+<body>
+  <h1>Mock React Page</h1>
+  <p>This page simulates a React app with re-render issues.</p>
+
+  <script>
+    // 模拟 vite-plugin 注入脚本运行后的结果
+    // 超过阈值（5）的组件会被 runner 报告为问题
+    window.__renderInspector__ = {
+      version: '1.0.0',
+      page: '/',
+      startTime: Date.now(),
+      threshold: 5,
+      components: {
+        // 高危：count > 50
+        'UserList': {
+          count: 68,
+          reasons: ['props:data', 'props:onSelect', 'context:ThemeContext'],
+        },
+        // 中等：count > 20
+        'Header': {
+          count: 31,
+          reasons: ['state:isScrolled'],
+        },
+        // 轻微：count > 5
+        'Avatar': {
+          count: 12,
+          reasons: ['props:src'],
+        },
+        // 未达阈值，不应被上报
+        'Button': {
+          count: 3,
+          reasons: [],
+        },
+      },
+    };
+
+    console.log('[fixture] window.__renderInspector__ 已设置', window.__renderInspector__);
+  </script>
+</body>
+</html>
