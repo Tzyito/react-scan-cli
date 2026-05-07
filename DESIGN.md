@@ -1,15 +1,16 @@
-# vite-plugin-render-inspector — 设计文档
+# react-scan-cli — 设计文档
 
-> 自动检测 React 页面重渲染问题，结果写入 GitHub Issues，支持定时巡检和手动触发。
+> 自动检测 React 页面重渲染问题 + 定时功能巡检，结果写入 GitHub / GitLab Issues，支持 Vite 和 Next.js。
 
 ---
 
 ## 目标
 
-- 用户只需装一个 Vite 插件 + 复制一个 GitHub Actions 模板，20 分钟完成接入
+- 装一个插件 + 复制一个 Actions 模板，20 分钟完成接入
 - 通过 cookie 触发，不影响普通用户
-- 检测结果自动写到指定 GitHub 仓库的 Issues，修复后手动关闭
-- 同一页面同一问题不重复创建 Issue，问题消失时自动关闭
+- 检测结果自动写到指定仓库的 Issues，同一问题不重复创建，问题消失时自动关闭
+- 支持功能巡检：声明 interactions + assertions，定时验证关键用户流程
+- 支持 Vite、Next.js；支持 GitHub、GitLab
 - 完全基于 GitHub Actions，不需要额外服务器
 
 ---
@@ -17,24 +18,34 @@
 ## 仓库结构
 
 ```
-vite-plugin-render-inspector/
+react-scan-cli/
 ├── packages/
-│   ├── vite-plugin/               # 给用户项目安装的 Vite 插件
+│   ├── vite-plugin/               # Vite 插件
 │   │   ├── src/
-│   │   │   ├── index.ts           # 插件入口，transformIndexHtml 注入脚本
-│   │   │   ├── inject.ts          # 注入到浏览器运行的检测代码（字符串模板）
-│   │   │   └── types.ts           # 插件配置类型
+│   │   │   ├── index.ts           # transformIndexHtml 注入脚本
+│   │   │   ├── inject.ts          # 注入到浏览器运行的检测代码
+│   │   │   └── types.ts
+│   │   ├── package.json
+│   │   └── tsconfig.json
+│   │
+│   ├── next/                      # Next.js 插件
+│   │   ├── src/
+│   │   │   ├── index.ts           # withRenderInspector(nextConfig) 导出
+│   │   │   ├── plugin.ts          # webpack entry 注入逻辑
+│   │   │   └── inject.ts          # 复用 vite-plugin 相同的检测脚本（构建时内联）
 │   │   ├── package.json
 │   │   └── tsconfig.json
 │   │
 │   ├── runner/                    # CLI 工具，在 GitHub Actions 里跑
 │   │   ├── src/
-│   │   │   ├── index.ts           # CLI 入口，parse config，串联流程
-│   │   │   ├── analyzer.ts        # Playwright 采集页面数据
+│   │   │   ├── cli.ts             # 环境变量解析，入口
+│   │   │   ├── index.ts           # run()，串联流程
+│   │   │   ├── analyzer.ts        # Playwright 采集：render 数据 + assertion 结果
 │   │   │   ├── reporter.ts        # 写 GitHub Issues
+│   │   │   ├── gitlab-reporter.ts # 写 GitLab Issues
 │   │   │   └── types.ts           # 共享类型定义
 │   │   ├── bin/
-│   │   │   └── render-inspector.ts  # CLI 入口，bun 直接执行 ts
+│   │   │   └── react-scan-cli.js
 │   │   ├── package.json
 │   │   └── tsconfig.json
 │   │
@@ -42,10 +53,9 @@ vite-plugin-render-inspector/
 │       └── types.ts               # packages 之间共享的类型
 │
 ├── workflow-template/
-│   └── render-check.yml           # 用户复制到自己项目的 Actions 模板
+│   └── render-check.yml
 │
-├── bunfig.toml                    # bun 配置
-├── package.json                   # 根 package.json，workspaces 配置
+├── package.json
 └── README.md
 ```
 
@@ -54,39 +64,41 @@ vite-plugin-render-inspector/
 ## 包名和发布
 
 ```
-@render-inspector/vite-plugin     # vite 插件
-@render-inspector/runner          # CLI 工具
+@react-scan-cli/vite-plugin   # Vite 插件
+@react-scan-cli/next          # Next.js 插件
+@react-scan-cli/runner        # CLI 工具
+@react-scan-cli/skills        # Claude Code skill
 ```
 
-CLI 命令：`render-inspector run`
+CLI 命令：`react-scan-cli`
 
 ---
 
 ## 核心流程
 
 ```
-1. 用户项目安装 @render-inspector/vite-plugin
-   └── vite.config.ts 加一行即可
+1. 用户项目安装插件（Vite 或 Next.js）
+   └── 注入检测脚本到客户端 bundle
 
 2. GitHub Actions 定时触发（每周一凌晨）
-   └── 安装 @render-inspector/runner
+   └── 安装 @react-scan-cli/runner
    └── npx playwright install chromium
-   └── render-inspector run
+   └── react-scan-cli
 
-3. Runner 读取配置（来自环境变量 RI_CONFIG）
-   └── 启动 Playwright 无头浏览器
+3. Runner 读取 RI_CONFIG，启动 Playwright
    └── 注入 cookie __render_inspector__=true
-   └── 访问每个页面，等待 observeDuration 毫秒
-   └── 读取 window.__renderInspector__ 数据
-   └── 截图保存为 base64（写到 Issue body 里，不需要外部存储）
+   └── 对每个 page：
+       ├── 导航到页面，等待 networkidle
+       ├── 执行 interactions（scroll / click / fill / wait ...）
+       ├── 【重渲染检测】读取 window.__renderInspector__ 数据
+       ├── 【功能巡检】执行 assertions，记录失败项
+       └── 截图 base64
 
-4. 写 GitHub Issues
-   └── 有问题 → 找同项目同页面的 open issue
-       ├── 存在 → 更新 body + 加评论说明是新一轮检测
-       └── 不存在 → 创建新 issue
-   └── 无问题 → 找同项目同页面的 open issue → 自动关闭并加评论
-
-5. 结果：接收仓库的 Issues 里可以看到所有问题
+4. 写 GitHub / GitLab Issues
+   └── 有问题（render 超标 或 assertion 失败）
+       ├── 已有 open issue → 更新 body + 加评论
+       └── 无 issue → 创建新 issue
+   └── 无问题 → 自动关闭已有 open issue
 ```
 
 ---
@@ -238,6 +250,107 @@ import { scan } from 'react-scan';
 
 ---
 
+## Next.js 插件实现
+
+### 注入原理
+
+Next.js 没有 `transformIndexHtml` 等价 hook，但支持在 `next.config.js` 中修改 webpack 配置。通过向客户端 entry 前置注入 inject 模块，实现与 vite-plugin 相同的效果：
+
+```ts
+// packages/next/src/plugin.ts
+import type { NextConfig } from 'next'
+
+export function withRenderInspector(nextConfig: NextConfig = {}): NextConfig {
+  return {
+    ...nextConfig,
+    webpack(config, options) {
+      // 只在客户端 bundle 注入
+      if (!options.isServer) {
+        const originalEntry = config.entry
+        config.entry = async () => {
+          const entries = await (typeof originalEntry === 'function'
+            ? originalEntry()
+            : originalEntry)
+
+          const injectPath = require.resolve('./inject-entry')
+
+          // 前置注入到 main-app entry（App Router 和 Pages Router 均适用）
+          const targets = ['main-app', 'main']
+          for (const target of targets) {
+            if (entries[target] && !entries[target].includes(injectPath)) {
+              entries[target] = [injectPath, ...entries[target]]
+            }
+          }
+          return entries
+        }
+      }
+
+      // 透传用户原有 webpack 配置
+      if (typeof nextConfig.webpack === 'function') {
+        return nextConfig.webpack(config, options)
+      }
+      return config
+    },
+  }
+}
+```
+
+### inject-entry.ts
+
+`inject-entry.ts` 是实际注入到 bundle 的模块，逻辑与 vite-plugin 的 inject.ts 相同，但用 `process.env.NODE_ENV` 替代 `import.meta.env.DEV`：
+
+```ts
+// packages/next/src/inject-entry.ts
+// 此文件被 webpack 作为 entry 注入，运行在浏览器端
+
+import { scan } from 'react-scan'
+
+const COOKIE = process.env.NEXT_PUBLIC_RENDER_INSPECTOR_COOKIE ?? '__render_inspector__'
+const THRESHOLD = Number(process.env.NEXT_PUBLIC_RENDER_INSPECTOR_THRESHOLD ?? 5)
+const isDev = process.env.NODE_ENV === 'development'
+
+const hasCookie = typeof document !== 'undefined' &&
+  document.cookie.split(';').some(c => c.trim() === `${COOKIE}=true`)
+
+if (hasCookie || isDev) {
+  window.__renderInspector__ = {
+    version: '1.1.0',
+    page: location.pathname,
+    startTime: Date.now(),
+    threshold: THRESHOLD,
+    components: {},
+  }
+
+  scan({
+    enabled: true,
+    showToolbar: isDev && !hasCookie,
+    log: false,
+    onRender(fiber, renders) {
+      // 同 vite-plugin inject.ts 逻辑
+      ...
+    },
+  })
+}
+```
+
+### 配置透传
+
+`withRenderInspector` 通过环境变量向 inject-entry 传递插件配置，用户在 `next.config.ts` 传入即可：
+
+```ts
+withRenderInspector({
+  renderInspector: {
+    threshold: 10,
+    triggerCookie: '__render_inspector__',
+    enableInDev: true,
+  }
+})
+```
+
+插件内部将这些值注入为 `NEXT_PUBLIC_*` 环境变量，无需用户手动设置。
+
+---
+
 ## runner 实现
 
 ### 类型定义
@@ -248,6 +361,22 @@ import { scan } from 'react-scan';
 export interface PageConfig {
   name: string;   // 页面展示名称，如 "社区首页"
   url: string;    // 路径，如 "/zh-CN/topics"
+  interactions?: Interaction[]   // 用户操作序列
+  assertions?: Assertion[]       // 功能巡检断言
+}
+
+// 断言类型：功能巡检
+export type Assertion =
+  | { type: 'url';     expected: string }                           // 当前 URL 包含该值
+  | { type: 'visible'; selector: string }                           // 元素在视口内可见
+  | { type: 'hidden';  selector: string }                           // 元素不存在或不可见
+  | { type: 'text';    selector: string; contains: string }         // 元素文本包含该值
+  | { type: 'count';   selector: string; expected: number }         // 匹配元素数量
+
+export interface AssertionResult {
+  assertion: Assertion
+  passed: boolean
+  actual?: string   // 失败时的实际值，用于 issue body
 }
 
 export interface RunnerConfig {
@@ -274,13 +403,42 @@ export interface IssueData {
   severity: 'high' | 'medium' | 'low';  // high: >50, medium: >20, low: >5
 }
 
+export interface JsError {
+  message: string;
+  stack: string;
+  components: string[];  // PascalCase names parsed from stack trace
+}
+
+export interface ApiError {
+  url: string;
+  status: number;
+  method: string;
+}
+
 export interface PageReport {
   page: string;
   url: string;
-  issues: IssueData[];
-  screenshotBase64: string;   // 截图直接存在 issue body，不需要外部存储
+  issues: IssueData[];              // 🔁 重渲染问题
+  jsErrors: JsError[];              // 💥 代码报错
+  apiErrors: ApiError[];            // 🌐 接口报错（同源 4xx/5xx）
+  assertionFailures: AssertionResult[];  // 📋 数据展示不全
+  authFailure: string | null;       // 🔐 登录失败
+  screenshotBase64: string;         // JPEG quality=60，约 50KB
   observeDuration: number;
   timestamp: string;
+}
+
+// 隐藏在 issue body 末尾，用于下次扫描时计算差量
+// <!-- scan-snapshot: {...} -->
+export interface ScanSnapshot {
+  renders: number;
+  renderComponents: string[];
+  jsErrors: number;
+  jsErrorComponents: string[];
+  apiErrors: number;
+  assertions: number;
+  authFail: boolean;
+  ts: string;
 }
 ```
 

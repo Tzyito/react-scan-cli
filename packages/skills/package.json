@@ -1,6 +1,6 @@
 {
   "name": "@react-scan-cli/skills",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Claude Code skills for react-scan-cli — install to get AI-guided setup and workflows",
   "type": "module",
   "bin": {

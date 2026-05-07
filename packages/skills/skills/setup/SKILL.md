@@ -1,13 +1,13 @@
 ---
 name: react-scan-cli
-description: Set up react-scan-cli in a Vite + React project. Guides the user through plugin installation, vite.config.ts configuration, CI/CD workflow setup (GitHub Actions or GitLab CI), and secret configuration. Use when the user wants to detect React re-render issues automatically.
+description: Set up react-scan-cli in a Vite or Next.js React project. Guides the user through plugin installation, framework config, CI/CD workflow setup (GitHub Actions or GitLab CI), and secret configuration. Use when the user wants to detect React re-render issues automatically.
 argument-hint: "[setup|plugin|workflow]"
 allowed-tools: Read, Edit, Write, Glob, Bash
 ---
 
 # react-scan-cli Setup
 
-You are helping the user integrate `@react-scan-cli/vite-plugin` into their project.
+You are helping the user integrate react-scan-cli into their project. It supports **Vite** and **Next.js**.
 
 The tool automatically detects React re-render issues via Playwright, then writes results to GitHub Issues or GitLab Issues — no extra server needed.
 
@@ -40,67 +40,84 @@ Then proceed to the matching section below.
 
 ---
 
-## Step 1 — Check current state
+## Step 1 — Detect framework and current state
 
-Run these reads in parallel before making any changes:
+Run these in parallel before making any changes:
 
-- Look for `vite.config.ts` or `vite.config.js` with `Glob("vite.config.*")`
-- Read the found config file
-- Check if `@react-scan-cli/vite-plugin` is already in `package.json`
+- Glob for `vite.config.*` — Vite project
+- Glob for `next.config.*` — Next.js project
+- Read `package.json` — check installed plugins and framework version
 - Check if `.github/workflows/` or `.gitlab-ci.yml` exists
 
-Tell the user what you found before proceeding.
+Tell the user what you found. If both configs exist, ask which app to configure.
 
 ---
 
 ## Step 2 — Install the plugin
 
-If `@react-scan-cli/vite-plugin` is not in `package.json`, detect the package manager first:
-
-- `bun.lockb` present → bun
+Detect the package manager first:
+- `bun.lock` or `bun.lockb` present → bun
 - `pnpm-lock.yaml` present → pnpm
 - `yarn.lock` present → yarn
 - otherwise → npm
 
-Then tell the user to run:
-
+**Vite project** — install `@react-scan-cli/vite-plugin`:
 ```bash
-# bun
-bun add -d @react-scan-cli/vite-plugin
+bun add -d @react-scan-cli/vite-plugin   # or npm/pnpm equivalent
+```
 
-# npm
-npm install -D @react-scan-cli/vite-plugin
-
-# pnpm
-pnpm add -D @react-scan-cli/vite-plugin
+**Next.js project** — install `@react-scan-cli/next`:
+```bash
+bun add -d @react-scan-cli/next          # or npm/pnpm equivalent
 ```
 
 Wait for confirmation before continuing.
 
 ---
 
-## Step 3 — Configure vite.config.ts
+## Step 3 — Configure the framework plugin
 
-Read the existing vite config. Add `reactScanPlugin()` to the plugins array:
+### Vite — `vite.config.ts`
+
+Read the existing config. Add `renderInspector()` to the plugins array:
 
 ```ts
-import { reactScanPlugin } from '@react-scan-cli/vite-plugin';
+import { renderInspector } from '@react-scan-cli/vite-plugin'
 
 // inside defineConfig:
 plugins: [
   // ... existing plugins ...
-  reactScanPlugin({
-    threshold: 5,      // report components that re-render more than N times
-    enableInDev: true, // highlight re-renders in dev mode automatically
+  renderInspector({
+    threshold: 5,      // report components re-rendering more than N times
+    enableInDev: true, // highlight in dev mode automatically
   }),
 ]
 ```
 
-**Rules:**
-- Preserve all existing plugins — never remove them
-- Add the import at the top with other imports
-- If the React plugin is present, place `reactScanPlugin()` after it
-- If the config uses `export default {}` (no defineConfig), still add correctly
+**Rules:** Preserve all existing plugins. Add import at the top. Place after the React plugin if present.
+
+### Next.js — `next.config.ts` (or `.js`)
+
+Read the existing config. Wrap the export with `withRenderInspector`:
+
+```ts
+import { withRenderInspector } from '@react-scan-cli/next'
+
+// wrap the existing config — preserve all existing fields
+export default withRenderInspector({
+  // ...existing nextConfig fields...
+})
+```
+
+If the file uses `module.exports`:
+```js
+const { withRenderInspector } = require('@react-scan-cli/next')
+module.exports = withRenderInspector({
+  // ...existing config...
+})
+```
+
+**Rules:** Never overwrite existing config fields — only wrap the export.
 
 After editing, show the diff and ask the user to confirm.
 
@@ -335,24 +352,51 @@ Then tell the user where to add the secret:
 
 ---
 
+## Step 6.5 — Offer functional inspection setup
+
+After showing the generated `RI_CONFIG`, ask:
+
+> Do you also want to set up **functional inspection** — simulating user interactions (clicks, form fills, navigation) and asserting that key flows work correctly?
+>
+> For example:
+> - "Login button redirects to /dashboard"
+> - "Search returns results"
+> - "Order panel opens after clicking Buy"
+>
+> If yes, run `/react-scan-patrol` and I'll guide you through it page by page.
+
+If the user says yes, stop here and let them invoke `/react-scan-patrol`.
+If no, continue to Step 7.
+
+---
+
 ## Step 7 — Verify and summarize
 
 Re-read the config file and workflow to confirm they look correct, then print the appropriate checklist:
 
-**GitHub:**
+**GitHub (Vite):**
 ```
 ✅ @react-scan-cli/vite-plugin installed
 ✅ vite.config.ts configured
 ✅ .github/workflows/render-check.yml created
 ⬜ Issue repo created: <issue_repo>        ← create if it doesn't exist
 ⬜ REACT_SCAN_TOKEN secret added           ← Settings → Secrets → Actions
-⬜ REACT_SCAN_CONFIG secret added          ← Settings → Secrets → Actions
+⬜ REACT_SCAN_CONFIG variable added        ← Settings → Secrets → Variables
 ```
 
-**GitLab:**
+**GitHub (Next.js):**
 ```
-✅ @react-scan-cli/vite-plugin installed
-✅ vite.config.ts configured
+✅ @react-scan-cli/next installed
+✅ next.config.ts wrapped with withRenderInspector
+✅ .github/workflows/render-check.yml created
+⬜ Issue repo created: <issue_repo>        ← create if it doesn't exist
+⬜ REACT_SCAN_TOKEN secret added           ← Settings → Secrets → Actions
+⬜ REACT_SCAN_CONFIG variable added        ← Settings → Secrets → Variables
+```
+
+**GitLab (Vite or Next.js):**
+```
+✅ plugin installed and configured
 ✅ .gitlab-ci.yml created
 ⬜ REACT_SCAN_TOKEN CI variable added      ← Settings → CI/CD → Variables
 ⬜ REACT_SCAN_CONFIG CI variable added     ← Settings → CI/CD → Variables
@@ -368,9 +412,11 @@ Then tell the user:
 
 ## Edge cases
 
-- **Monorepo**: Multiple `vite.config.*` found — ask which app to configure.
-- **Already configured**: `reactScanPlugin` already in config — skip Step 3.
+- **Monorepo**: Multiple `vite.config.*` or `next.config.*` found — ask which app to configure.
+- **Already configured**: plugin already in config — skip Step 3.
 - **Workflow already exists**: Show a diff and ask before overwriting.
-- **No Vite config**: Ask if this is a Vite project; if not, explain the plugin only works with Vite.
+- **No Vite or Next.js config**: Ask if this is a Vite or Next.js project; if neither, explain the current plugins only support these two frameworks.
+- **Next.js + `withSomething` wrappers**: If `next.config.ts` already uses other wrappers (e.g. `withBundleAnalyzer`), nest them: `withRenderInspector(withBundleAnalyzer({...}))`.
 - **Self-hosted GitLab**: Always ask for `gitlabBaseUrl` if provider is GitLab.
 - **Pages auto-discovery**: If the user is unsure what pages to list, reassure them that leaving `pages` blank will auto-crawl from `baseUrl` up to `maxPages` (default 20).
+- **User wants functional inspection**: Point them to `/react-scan-patrol`.
