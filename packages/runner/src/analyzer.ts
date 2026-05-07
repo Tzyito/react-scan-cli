@@ -41,7 +41,7 @@ export async function analyzePages(config: RunnerConfig): Promise<PageReport[]> 
   const reports: PageReport[] = [];
 
   for (const pageConfig of pages) {
-    console.log(`[react-scan-cli] analyzing: ${pageConfig.name} (${pageConfig.url})`);
+    console.log(`[react-scan-cli] analyzing: ${pageConfig.name} → ${baseUrl}${pageConfig.url}`);
     try {
       const report = await analyzeSinglePage(context, baseUrl, pageConfig, observeDuration, threshold);
       reports.push(report);
