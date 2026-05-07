@@ -12,11 +12,11 @@ export function renderInspector(options: RenderInspectorOptions = {}): Plugin {
 
   return {
     name: 'vite-plugin-react-scan-cli',
-    // enforce: 'pre' — inject before Vite's built-in HTML transform so that
+    // order: 'pre' — inject before Vite's built-in HTML transform so that
     // bare module imports (e.g. react-scan) inside the script are resolved
     transformIndexHtml: {
-      enforce: 'pre',
-      transform() {
+      order: 'pre',
+      handler() {
         return [
           {
             tag: 'script',
