@@ -1,13 +1,14 @@
 import { chromium, type BrowserContext } from 'playwright';
 import type { RunnerConfig, PageReport, ComponentData, IssueData } from './types';
+import { crawlPages } from './crawler';
 
 export async function analyzePages(config: RunnerConfig): Promise<PageReport[]> {
   const {
     baseUrl,
-    pages,
     triggerCookie = '__render_inspector__',
     observeDuration = 8000,
     threshold = 5,
+    maxPages = 20,
     authSetup,
   } = config;
 
@@ -28,6 +29,13 @@ export async function analyzePages(config: RunnerConfig): Promise<PageReport[]> 
     const page = await context.newPage();
     await authSetup(page);
     await page.close();
+  }
+
+  let pages = config.pages;
+  if (!pages || pages.length === 0) {
+    console.log(`[react-scan-cli] no pages specified — crawling ${baseUrl} (max ${maxPages})`);
+    pages = await crawlPages(context, baseUrl, maxPages);
+    console.log(`[react-scan-cli] discovered ${pages.length} page(s): ${pages.map(p => p.name).join(', ')}`);
   }
 
   const reports: PageReport[] = [];

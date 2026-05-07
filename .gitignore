@@ -4,3 +4,4 @@ dist/
 scripts/fixtures/screenshot.png
 *.local
 .DS_Store
+.npmrc
