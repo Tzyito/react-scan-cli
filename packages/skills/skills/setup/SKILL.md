@@ -248,13 +248,13 @@ jobs:
           bun-version: latest
 
       - name: Install runner
-        run: bun install -g @react-scan-cli/runner
+        run: npm install -g @react-scan-cli/runner@latest
 
       - name: Install Playwright Chromium
-        run: bunx playwright install chromium --with-deps
+        run: npx playwright install chromium --with-deps
 
       - name: Run check
-        run: react-scan-cli run
+        run: react-scan-cli
         env:
           GITHUB_TOKEN: ${{ secrets.REACT_SCAN_TOKEN }}
           RI_CONFIG: ${{ secrets.REACT_SCAN_CONFIG }}

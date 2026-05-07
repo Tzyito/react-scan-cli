@@ -1,9 +1,9 @@
 {
   "name": "@react-scan-cli/runner",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "CLI runner for react-scan-cli — collects data via Playwright and reports to GitHub Issues",
   "bin": {
-    "react-scan-cli": "./bin/react-scan-cli.ts"
+    "react-scan-cli": "./bin/react-scan-cli.js"
   },
   "main": "dist/index.js",
   "types": "dist/src/index.d.ts",
