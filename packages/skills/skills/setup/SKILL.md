@@ -128,6 +128,89 @@ Ask the user:
    ```
 4. **Auth required?** — do any pages require login?
 5. **Observe duration** — seconds to watch each page (default: 8)
+6. **What does each page do?** — brief description so you can generate appropriate interactions (e.g. "news list with tabs", "search page", "infinite scroll feed")
+
+### 4b.5 — Generate interactions for each page
+
+Each page runs a default scroll sequence automatically. Use the `interactions` array to add page-specific actions **after** the scroll.
+
+**Available interaction types:**
+
+| Type | Required fields | What it does |
+|------|----------------|--------------|
+| `scroll` | `scrollY` (0–1 = % of page, >1 = pixels) | Smooth scroll to position |
+| `click` | `selector` | Click first matching element |
+| `hover` | `selector` | Hover over element (triggers dropdowns/tooltips) |
+| `fill` | `selector`, `value` | Type text into an input field |
+| `wait` | `waitMs` | Fixed pause in milliseconds |
+| `waitForSelector` | `selector`, `waitMs` (timeout) | Wait until element appears in DOM |
+
+**Page pattern → interaction template:**
+
+**Tabs / segmented control**
+```json
+[
+  { "type": "click", "selector": "[role=tab]:nth-child(2)", "description": "click tab 2" },
+  { "type": "wait", "waitMs": 600 },
+  { "type": "click", "selector": "[role=tab]:nth-child(3)", "description": "click tab 3" },
+  { "type": "wait", "waitMs": 600 }
+]
+```
+
+**Search / filter**
+```json
+[
+  { "type": "click", "selector": "input[type=search], input[placeholder*=search i]", "description": "focus search" },
+  { "type": "fill", "selector": "input[type=search], input[placeholder*=search i]", "value": "test", "description": "type search query" },
+  { "type": "waitForSelector", "selector": "[data-testid=search-results], .search-results", "waitMs": 3000 }
+]
+```
+
+**Modal / dialog**
+```json
+[
+  { "type": "click", "selector": "button[data-modal], button:has-text('Open')", "description": "open modal" },
+  { "type": "waitForSelector", "selector": "[role=dialog]", "waitMs": 2000 },
+  { "type": "wait", "waitMs": 800 }
+]
+```
+
+**Dropdown / select**
+```json
+[
+  { "type": "click", "selector": "[data-dropdown-trigger], .dropdown-toggle", "description": "open dropdown" },
+  { "type": "waitForSelector", "selector": "[data-dropdown-menu], .dropdown-menu", "waitMs": 2000 },
+  { "type": "click", "selector": "[data-dropdown-menu] li:nth-child(2)", "description": "select option 2" }
+]
+```
+
+**Infinite scroll / virtualized list**
+```json
+[
+  { "type": "scroll", "scrollY": 0.3, "description": "trigger first lazy load" },
+  { "type": "wait", "waitMs": 800 },
+  { "type": "scroll", "scrollY": 0.6 },
+  { "type": "wait", "waitMs": 800 },
+  { "type": "scroll", "scrollY": 0.9 },
+  { "type": "wait", "waitMs": 1000 }
+]
+```
+
+**Date picker / calendar**
+```json
+[
+  { "type": "click", "selector": "[data-datepicker], input[type=date]", "description": "open calendar" },
+  { "type": "waitForSelector", "selector": "[role=dialog], .calendar", "waitMs": 2000 },
+  { "type": "click", "selector": ".calendar-next, button[aria-label*=next]", "description": "next month" }
+]
+```
+
+**Rules for generating interactions:**
+- Use `waitForSelector` after `click` when the click triggers async data loading
+- Prefer semantic/ARIA selectors (`[role=tab]`, `[aria-label=...]`) over class names when possible — they're more stable
+- Add `description` to every step so logs are readable
+- Keep total interaction time under `observeDuration - 2000ms` so there's still time to collect data
+- If the user says a page has login-gated content, note it requires `authSetup` (out of scope, suggest manual config)
 
 ### 4c — Provider-specific questions
 

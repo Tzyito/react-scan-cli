@@ -202,6 +202,21 @@ async function runInteractions(page: Page, custom?: PageInteraction[]): Promise<
           }
           break;
         }
+        case 'fill': {
+          if (action.selector && action.value != null) {
+            const el = page.locator(action.selector).first();
+            await el.fill(action.value, { timeout: 3000 });
+          }
+          break;
+        }
+        case 'waitForSelector': {
+          if (action.selector) {
+            await page.waitForSelector(action.selector, {
+              timeout: action.waitMs ?? 5000,
+            });
+          }
+          break;
+        }
         case 'wait': {
           await page.waitForTimeout(action.waitMs ?? 500);
           break;

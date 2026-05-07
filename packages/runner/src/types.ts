@@ -58,13 +58,15 @@ export interface ComponentData {
 }
 
 export interface PageInteraction {
-  type: 'scroll' | 'click' | 'hover' | 'wait';
-  /** CSS selector for click/hover */
+  type: 'scroll' | 'click' | 'hover' | 'wait' | 'fill' | 'waitForSelector';
+  /** CSS selector — required for click / hover / fill / waitForSelector */
   selector?: string;
   /** Scroll destination. 0–1 = fraction of page height; >1 = pixels from top. */
   scrollY?: number;
-  /** Wait duration in ms (for type: 'wait') */
+  /** Wait duration in ms (type: 'wait') or timeout ceiling for waitForSelector */
   waitMs?: number;
+  /** Text to type into the element (type: 'fill') */
+  value?: string;
   /** Human-readable label shown in logs */
   description?: string;
 }
