@@ -1,6 +1,13 @@
 import { Octokit } from '@octokit/rest';
 import type { PageReport } from './types';
-import { buildIssueBody, buildIssueTitle, buildDiffComment, parseSnapshot } from './issue-body';
+import {
+  buildIssueBody,
+  buildOverflowStub,
+  buildIssueTitle,
+  buildDiffComment,
+  parseSnapshot,
+  GITHUB_BODY_LIMIT,
+} from './issue-body';
 
 const LABEL_BASE = 'react-scan-cli';
 
@@ -53,6 +60,62 @@ export class GitHubReporter {
     this.repo = repo;
   }
 
+  private slugify(url: string): string {
+    return url
+      .replace(/^https?:\/\/[^/]+/, '')
+      .replace(/^\//, '')
+      .replace(/[^a-zA-Z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      || 'root';
+  }
+
+  private fileTimestamp(ts: string): string {
+    const utc8 = new Date(new Date(ts).getTime() + 8 * 60 * 60 * 1000);
+    return utc8.toISOString().slice(0, 19).replace(/:/g, '-');
+  }
+
+  private rawUrl(path: string): string {
+    return `https://raw.githubusercontent.com/${this.owner}/${this.repo}/main/${path}`;
+  }
+
+  private blobUrl(path: string): string {
+    return `https://github.com/${this.owner}/${this.repo}/blob/main/${path}`;
+  }
+
+  private async uploadFile(path: string, base64Content: string, commitMsg: string): Promise<void> {
+    await this.octokit.repos.createOrUpdateFileContents({
+      owner: this.owner,
+      repo: this.repo,
+      path,
+      message: commitMsg,
+      content: base64Content,
+      branch: 'main',
+    });
+  }
+
+  private async uploadScreenshot(report: PageReport, projectName: string): Promise<string | null> {
+    if (!report.screenshotBase64) return null;
+    const slug = this.slugify(report.url);
+    const ts = this.fileTimestamp(report.timestamp);
+    const path = `screenshots/${projectName}/${slug}/${ts}.png`;
+    try {
+      await this.uploadFile(path, report.screenshotBase64, `chore(scan): screenshot ${projectName}/${slug}`);
+      return this.rawUrl(path);
+    } catch {
+      return null;
+    }
+  }
+
+  private async uploadReportFile(report: PageReport, projectName: string, body: string): Promise<string> {
+    const slug = this.slugify(report.url);
+    const ts = this.fileTimestamp(report.timestamp);
+    const path = `reports/${projectName}/${slug}/${ts}.md`;
+    const content = Buffer.from(body).toString('base64');
+    await this.uploadFile(path, content, `chore(scan): report ${projectName}/${slug}`);
+    return this.blobUrl(path);
+  }
+
   async report(reports: PageReport[], projectName: string): Promise<void> {
     await this.ensureLabels(projectName);
     for (const report of reports) {
@@ -82,7 +145,12 @@ export class GitHubReporter {
   private async upsertIssue(report: PageReport, projectName: string): Promise<void> {
     const existing = await this.findOpenIssue(projectName, report.url);
     const title = buildIssueTitle(report, projectName);
-    const body = buildIssueBody(report, projectName);
+    const screenshotUrl = await this.uploadScreenshot(report, projectName);
+    let body = buildIssueBody(report, projectName, screenshotUrl);
+    if (body.length > GITHUB_BODY_LIMIT) {
+      const reportFileUrl = await this.uploadReportFile(report, projectName, body);
+      body = buildOverflowStub(report, projectName, reportFileUrl);
+    }
     const labels = getLabels(report, projectName);
 
     if (existing) {
